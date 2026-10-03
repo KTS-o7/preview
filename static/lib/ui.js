@@ -114,3 +114,24 @@ export function loadCSS(href) {
   }
   return p;
 }
+
+/** @type {Map<string, Promise<void>>} */
+const scriptLoads = new Map();
+/**
+ * Load a classic (UMD) vendor script once, for libraries that only ship
+ * globals. Prefer ESM builds with dynamic import() when available.
+ * @param {string} src absolute path, e.g. '/vendor/jszip.min.js'
+ */
+export function loadScript(src) {
+  let p = scriptLoads.get(src);
+  if (!p) {
+    p = new Promise((resolve, reject) => {
+      const s = el('script', { src });
+      s.addEventListener('load', () => resolve());
+      s.addEventListener('error', () => reject(new Error(`failed to load ${src}`)));
+      document.head.append(s);
+    });
+    scriptLoads.set(src, p);
+  }
+  return p;
+}
