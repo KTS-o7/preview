@@ -35,6 +35,11 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     else
       echo "warning: Cloudflare still serves an older page (purge failed?); it expires within 5 minutes" >&2
     fi
+    # Every deploy changes all /v/<build>/ URLs. Fetch each file once so the
+    # nearest Cloudflare edge has them before the first real visit.
+    (cd static && find . -type f ! -name VERSIONS | sed 's|^\./||') |
+      xargs -P 8 -I{} curl -fsS -o /dev/null -H 'Accept-Encoding: gzip' "$URL/v/$build/{}" &&
+      echo "warmed Cloudflare edge for build $build"
     exit 0
   fi
   sleep 1
