@@ -1,0 +1,56 @@
+.xlsx-note {
+  padding: 4px 16px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.xlsx-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.xlsx-range { width: 160px; }
+.xlsx-empty h2 { margin: 0; color: var(--text); }
+.xlsx-bench { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.xlsx-tabs {
+  display: flex; background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 0 8px; overflow-x: auto; flex-shrink: 0;
+}
+.xlsx-tab {
+  background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  padding: 8px 14px; color: var(--muted); font-size: 13px;
+}
+.xlsx-tab:hover { background: none; color: var(--text); }
+.xlsx-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.xlsx-grid-wrap { flex: 1; overflow: auto; background: var(--bg); min-height: 0; }
+.xlsx-grid { border-collapse: collapse; user-select: none; font-variant-numeric: tabular-nums; }
+.xlsx-grid th, .xlsx-grid td {
+  border: 1px solid var(--border); min-width: 80px; max-width: 240px; height: 26px;
+  padding: 0 6px; text-align: left; vertical-align: middle;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.xlsx-grid th {
+  background: #1a2030; color: var(--muted); font-weight: 500; font-size: 12px;
+  text-align: center; position: sticky; top: 0; z-index: 2;
+}
+.xlsx-grid th.rowhead { left: 0; z-index: 3; min-width: 44px; max-width: 44px; }
+.xlsx-grid td.rowhead {
+  background: #1a2030; color: var(--muted); text-align: center; font-size: 12px;
+  position: sticky; left: 0; z-index: 1; min-width: 44px; max-width: 44px; cursor: default;
+}
+.xlsx-grid td { background: var(--panel); cursor: cell; }
+.xlsx-grid td:hover { background: var(--cell-hover); }
+.xlsx-grid td:focus { outline: 2px solid var(--accent-2); outline-offset: -2px; }
+.xlsx-grid td.editing { background: var(--cell-edit); box-shadow: inset 0 0 0 1px var(--accent); padding: 0; }
+.xlsx-grid td.editing input {
+  width: 100%; height: 100%; border: 0; border-radius: 0; background: transparent;
+  padding: 0 6px; font-size: inherit; outline: none;
+}
+.xlsx-grid td.saved { animation: xlsx-flash 0.4s; }
+.xlsx-grid td.more { position: static; text-align: left; background: var(--bg); max-width: none; border: 0; padding: 8px 6px; }
+@keyframes xlsx-flash {
+  0% { background: rgba(88, 201, 122, 0.3); }
+  100% { background: var(--panel); }
+}
+
+@media (max-width: 640px) {
+  .xlsx-note { padding: 4px 12px; }
+  .xlsx-range { width: 120px; }
+  .xlsx-grid td, .xlsx-grid th { min-width: 64px; }
+}
