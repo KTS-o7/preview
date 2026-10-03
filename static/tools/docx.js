@@ -2,7 +2,7 @@
 // DOCX viewer built on docx-preview (needs JSZip as a global).
 import { el, toolbar, download, fileButton, formatBytes, loadCSS, loadScript } from '../lib/ui.js';
 
-const ZOOM_MIN = 50;
+const ZOOM_MIN = 25;
 const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 
@@ -60,6 +60,16 @@ export async function mount(root, input) {
     plus.toggleAttribute('disabled', zoom >= ZOOM_MAX);
   }
 
+  // On narrow screens, start zoomed out so the whole page width is visible.
+  function fitWidth() {
+    const page = /** @type {HTMLElement | null} */ (doc.querySelector('section.docx'));
+    if (!page) return;
+    setZoom(100); // measure unzoomed
+    const width = page.getBoundingClientRect().width;
+    const avail = scroll.clientWidth - 32;
+    if (width > avail) setZoom(Math.floor((avail / width) * 100));
+  }
+
   /** @param {string} msg */
   function showError(msg) {
     doc.replaceChildren(el('div', { class: 'docx-error error' }, msg));
@@ -91,6 +101,7 @@ export async function mount(root, input) {
         breakPages: true,
       });
       fixSymbolBullets(doc);
+      fitWidth();
     } catch (e) {
       if (my !== seq) return;
       console.error(e);

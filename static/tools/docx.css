@@ -1,6 +1,6 @@
 .docx-scroll { flex: 1; overflow: auto; background: #2b2f3a; min-height: 0; }
 .docx-doc { min-height: 100%; display: flex; flex-direction: column; }
-.docx-doc .docx-wrapper { background: transparent; padding: 24px 16px; flex: 1; }
+.docx-doc .docx-wrapper { background: transparent; padding: 24px 16px; flex: 1; align-items: safe center; }
 .docx-doc .docx-wrapper > section.docx { box-shadow: 0 2px 14px rgba(0, 0, 0, 0.6); margin-bottom: 20px; }
 .docx-pct { min-width: 4ch; text-align: center; font-size: 13px; color: var(--muted); }
 .docx-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
