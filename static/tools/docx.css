@@ -1,0 +1,26 @@
+.docx-scroll { flex: 1; overflow: auto; background: #2b2f3a; min-height: 0; }
+.docx-doc { min-height: 100%; display: flex; flex-direction: column; }
+.docx-doc .docx-wrapper { background: transparent; padding: 24px 16px; flex: 1; }
+.docx-doc .docx-wrapper > section.docx { box-shadow: 0 2px 14px rgba(0, 0, 0, 0.6); margin-bottom: 20px; }
+.docx-pct { min-width: 4ch; text-align: center; font-size: 13px; color: var(--muted); }
+.docx-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.docx-msg, .docx-error { padding: 32px 16px; text-align: center; }
+.docx-error { max-width: 640px; margin: 0 auto; }
+
+@media (max-width: 640px) {
+  .docx-doc .docx-wrapper { padding: 12px 8px; }
+}
+
+@media print {
+  body:has(.tool-docx) { display: block; height: auto; background: #fff; }
+  body:has(.tool-docx) header,
+  body:has(.tool-docx) #toast,
+  body:has(.tool-docx) #drop-overlay,
+  .tool-docx .toolbar { display: none !important; }
+  body:has(.tool-docx) main,
+  .tool-docx,
+  .tool-docx .docx-scroll,
+  .tool-docx .docx-doc { display: block; height: auto; overflow: visible; background: #fff; zoom: 1 !important; }
+  .tool-docx .docx-doc .docx-wrapper { padding: 0; background: #fff; }
+  .tool-docx .docx-doc .docx-wrapper > section.docx { box-shadow: none; margin: 0; }
+}

@@ -1,0 +1,22 @@
+.img-view {
+  flex: 1; position: relative; overflow: hidden; min-height: 0;
+  background: var(--bg);
+  touch-action: none; cursor: grab; user-select: none;
+}
+.img-view.panning { cursor: grabbing; }
+.img-el {
+  position: absolute; left: 0; top: 0;
+  transform-origin: 0 0; max-width: none; max-height: none;
+  -webkit-user-drag: none;
+  /* checkerboard shows through transparent pixels */
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%),
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.img-empty { position: absolute; inset: 0; cursor: default; touch-action: auto; }
+.img-pct { min-width: 5ch; text-align: right; font-size: 12px; color: var(--muted); }
+.img-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
