@@ -58,6 +58,18 @@ func TestXLSXRoundTrip(t *testing.T) {
 		}
 	}
 
+	// Reads after an edit show computed formula values, not stale caches.
+	resp, err = http.Get(srv.URL + "/api/xlsx/" + up.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got workbookInfo
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if v := got.Sheets[0].Cells[2][0]; v != "85" {
+		t.Errorf("read A3 = %q, want 85", v)
+	}
+
 	resp, err = http.Get(srv.URL + "/api/xlsx/" + up.ID + "/download")
 	if err != nil {
 		t.Fatal(err)

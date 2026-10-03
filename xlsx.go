@@ -35,9 +35,10 @@ const (
 )
 
 type workbook struct {
-	mu         sync.Mutex // guards f and closed
+	mu         sync.Mutex // guards f, closed and edited
 	f          *excelize.File
 	closed     bool
+	edited     bool         // formula caches may be stale; recalculate on read
 	lastAccess atomic.Int64 // unix nanoseconds
 }
 
@@ -110,7 +111,7 @@ func (s *xlsxStore) lookup(id string) *workbook {
 
 // withBook runs fn holding the workbook lock. It writes the 404 itself when
 // the id is unknown or the workbook was evicted meanwhile.
-func (s *xlsxStore) withBook(w http.ResponseWriter, id string, fn func(f *excelize.File)) {
+func (s *xlsxStore) withBook(w http.ResponseWriter, id string, fn func(wb *workbook)) {
 	wb := s.lookup(id)
 	if wb == nil {
 		expired(w)
@@ -122,7 +123,7 @@ func (s *xlsxStore) withBook(w http.ResponseWriter, id string, fn func(f *exceli
 		expired(w)
 		return
 	}
-	fn(wb.f)
+	fn(wb)
 }
 
 func expired(w http.ResponseWriter) {
@@ -150,8 +151,8 @@ func (s *xlsxStore) upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		f, err = excelize.OpenReader(part, excelize.Options{
-			UnzipSizeLimit:    1 << 30,
-			UnzipXMLSizeLimit: 16 << 20, // larger sheet XML spills to temp files
+			UnzipSizeLimit:    256 << 20, // zip-bomb guard; the service is capped at 256M RSS
+			UnzipXMLSizeLimit: 16 << 20,  // larger sheet XML spills to temp files
 		})
 		if err != nil {
 			uploadErr(w, err)
@@ -167,7 +168,7 @@ func (s *xlsxStore) upload(w http.ResponseWriter, r *http.Request) {
 	id := newID()
 	info := workbookInfo{ID: id, Sheets: []sheetInfo{}}
 	for _, name := range f.GetSheetList() {
-		si, err := describeSheet(f, name, "")
+		si, err := describeSheet(f, name, "", false)
 		if err != nil {
 			f.Close()
 			writeErr(w, http.StatusBadRequest, "cannot read sheet: "+err.Error())
@@ -195,10 +196,10 @@ func uploadErr(w http.ResponseWriter, err error) {
 func (s *xlsxStore) read(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	rng := r.URL.Query().Get("range")
-	s.withBook(w, id, func(f *excelize.File) {
+	s.withBook(w, id, func(wb *workbook) {
 		info := workbookInfo{ID: id, Sheets: []sheetInfo{}}
-		for _, name := range f.GetSheetList() {
-			si, err := describeSheet(f, name, rng)
+		for _, name := range wb.f.GetSheetList() {
+			si, err := describeSheet(wb.f, name, rng, wb.edited)
 			if err != nil {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
@@ -225,15 +226,16 @@ func (s *xlsxStore) edit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.withBook(w, id, func(f *excelize.File) {
-		if idx, err := f.GetSheetIndex(p.Sheet); err != nil || idx < 0 {
+	s.withBook(w, id, func(wb *workbook) {
+		if idx, err := wb.f.GetSheetIndex(p.Sheet); err != nil || idx < 0 {
 			writeErr(w, http.StatusBadRequest, "sheet '"+p.Sheet+"' not found")
 			return
 		}
-		if err := setCell(f, p.Sheet, cell, p.Value); err != nil {
+		if err := setCell(wb.f, p.Sheet, cell, p.Value); err != nil {
 			writeErr(w, http.StatusUnprocessableEntity, "spreadsheet error: "+err.Error())
 			return
 		}
+		wb.edited = true
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 	})
 }
@@ -270,8 +272,8 @@ func parseNumber(s string) (float64, bool) {
 }
 
 func (s *xlsxStore) download(w http.ResponseWriter, r *http.Request) {
-	s.withBook(w, r.PathValue("id"), func(f *excelize.File) {
-		buf, err := f.WriteToBuffer()
+	s.withBook(w, r.PathValue("id"), func(wb *workbook) {
+		buf, err := wb.f.WriteToBuffer()
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "spreadsheet error: "+err.Error())
 			return
@@ -288,7 +290,11 @@ func (s *xlsxStore) download(w http.ResponseWriter, r *http.Request) {
 // describeSheet reads one sheet. Dimensions follow xl: the data extent with a
 // 20x8 minimum, clamped to the requested range when there is one. The result
 // is rows x cols with "" for blanks.
-func describeSheet(f *excelize.File, name, rng string) (sheetInfo, error) {
+//
+// excelize returns the values Excel cached for formula cells. Once the
+// workbook has been edited those caches can be stale (or empty for new
+// formulas), so recalc evaluates every formula cell in the window instead.
+func describeSheet(f *excelize.File, name, rng string, recalc bool) (sheetInfo, error) {
 	r1, c1, r2, c2 := parseA1Range(rng)
 	loRow, loCol := max(r1, 1), max(c1, 1)
 
@@ -341,6 +347,19 @@ func describeSheet(f *excelize.File, name, rng string) (sheetInfo, error) {
 		cells[i] = make([]string, nc)
 		if i < len(kept) {
 			copy(cells[i], kept[i])
+		}
+		if !recalc {
+			continue
+		}
+		for j := range cells[i] {
+			ref, _ := excelize.CoordinatesToCellName(loCol+j, loRow+i)
+			if formula, _ := f.GetCellFormula(name, ref); formula != "" {
+				if v, err := f.CalcCellValue(name, ref); err == nil {
+					cells[i][j] = v
+				} else {
+					cells[i][j] = "#ERROR"
+				}
+			}
 		}
 	}
 	return sheetInfo{Name: name, Rows: nr, Cols: nc, Cells: cells}, nil

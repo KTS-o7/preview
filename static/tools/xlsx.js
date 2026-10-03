@@ -308,12 +308,42 @@ export async function mount(root, input) {
       td.classList.add('saved');
       setTimeout(() => td.classList.remove('saved'), 400);
       setStatus(`saved · ${s.name} · ${colLabel(col)}${row}`);
+      scheduleRefresh();
     } catch (e) {
       if (e instanceof ExpiredError) { showExpired(); return; }
       restore(td);
       fail(e, 'Save');
     } finally {
       saving = false;
+    }
+  }
+
+  // Formulas (and cells that depend on the edited one) are recalculated by the
+  // server. Re-read the current view after edits settle and patch only the
+  // cells whose value changed, so scroll position and focus are kept.
+  let refreshTimer = 0;
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(refreshValues, 400);
+  }
+  async function refreshValues() {
+    if (!id || saving) return;
+    try {
+      const q = rangeText ? `?range=${encodeURIComponent(rangeText)}` : '';
+      /** @type {WorkbookInfo} */
+      const wb = await json(await fetch(`${API}/${id}${q}`));
+      const fresh = wb.sheets.find((x) => x.name === active);
+      const cur = sheet();
+      if (!fresh || !cur) return;
+      sheets = wb.sheets;
+      for (const td of /** @type {NodeListOf<HTMLElement>} */ (table.querySelectorAll('td[data-r]'))) {
+        if (td.classList.contains('editing')) continue;
+        const { r, c } = rc(td);
+        const v = fresh.cells[r]?.[c] ?? '';
+        if (td.textContent !== v) { td.textContent = v; td.title = v; }
+      }
+    } catch (e) {
+      if (e instanceof ExpiredError) showExpired();
     }
   }
 
@@ -380,5 +410,5 @@ export async function mount(root, input) {
   showEmpty();
   if (input.file) await upload(input.file);
 
-  return () => { alive = false; };
+  return () => { alive = false; clearTimeout(refreshTimer); };
 }
