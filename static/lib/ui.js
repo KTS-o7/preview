@@ -94,6 +94,16 @@ export function formatBytes(n) {
 /** Files above this size get a warning before browser-only processing. */
 export const SOFT_LIMIT = 50 * 1024 * 1024;
 
+// Static root this module was served from: /v/<build>/ in production, so
+// every asset URL carries the build hash and can be cached forever.
+const ROOT = new URL('../', import.meta.url);
+
+/**
+ * Resolve a static path like '/tools/csv.css' against the versioned root.
+ * @param {string} path
+ */
+export const asset = (path) => new URL(path.replace(/^\//, ''), ROOT).href;
+
 /** @type {Map<string, Promise<void>>} */
 const cssLoads = new Map();
 /**
@@ -102,6 +112,7 @@ const cssLoads = new Map();
  * @param {string} href absolute path, e.g. '/tools/csv.css'
  */
 export function loadCSS(href) {
+  href = asset(href);
   let p = cssLoads.get(href);
   if (!p) {
     p = new Promise((resolve) => {
@@ -123,6 +134,7 @@ const scriptLoads = new Map();
  * @param {string} src absolute path, e.g. '/vendor/jszip.min.js'
  */
 export function loadScript(src) {
+  src = asset(src);
   let p = scriptLoads.get(src);
   if (!p) {
     p = new Promise((resolve, reject) => {

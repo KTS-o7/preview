@@ -1,7 +1,7 @@
 // @ts-check
 // Diff tool: two panes, unified / split / word views. The diff itself runs in
 // /lib/diff.worker.js; this file only renders the model it returns.
-import { el, toolbar, fileButton, loadCSS } from '../lib/ui.js';
+import { el, toolbar, fileButton, loadCSS, asset } from '../lib/ui.js';
 import { collapse, pairRows } from '../lib/diffview.js';
 
 /** @typedef {import('../lib/diffview.js').Line} Line */
@@ -136,7 +136,7 @@ export async function mount(root, input) {
   }
 
   /** @type {Worker} */
-  const worker = new Worker('/lib/diff.worker.js', { type: 'module' });
+  const worker = new Worker(asset('/lib/diff.worker.js'), { type: 'module' });
   worker.onmessage = (ev) => {
     const d = ev.data;
     if (d.seq !== seq) return; // stale

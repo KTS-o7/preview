@@ -9,7 +9,7 @@
 // handler so the global handler below doesn't re-route the file.
 
 import { detectFile } from './lib/detect.js';
-import { el, toast, formatBytes, SOFT_LIMIT } from './lib/ui.js';
+import { el, toast, formatBytes, SOFT_LIMIT, loadCSS } from './lib/ui.js';
 
 /** @type {{id: string, name: string, desc: string, server?: boolean}[]} */
 export const TOOLS = [
@@ -81,6 +81,9 @@ async function route() {
   const root = el('div', { class: `tool tool-${id}` });
   app.replaceChildren(root);
   try {
+    // Fetch the tool's stylesheet alongside its module instead of after it;
+    // the tool's own loadCSS call then reuses this request.
+    loadCSS(`/tools/${id}.css`);
     const mod = await import(`./tools/${id}.js`);
     if (seq !== routeSeq) return;
     cleanup = await mod.mount(root, input);

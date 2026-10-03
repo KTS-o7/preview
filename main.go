@@ -12,6 +12,8 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
+	"io"
 	"io/fs"
 	"log"
 	"mime"
@@ -19,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -82,25 +85,64 @@ func loadAssets() (map[string]*asset, error) {
 		if err != nil {
 			return err
 		}
-		sum := sha256.Sum256(body)
-		a := &asset{
-			body:        body,
-			contentType: typeFor(p),
-			etag:        `"` + hex.EncodeToString(sum[:8]) + `"`,
-		}
-		if strings.HasPrefix(a.contentType, "text/") || strings.Contains(a.contentType, "json") || strings.Contains(a.contentType, "svg") {
-			var buf bytes.Buffer
-			zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
-			zw.Write(body)
-			zw.Close()
-			if buf.Len() < len(body) {
-				a.gz = buf.Bytes()
-			}
-		}
-		assets["/"+p] = a
+		assets["/"+p] = newAsset(p, body)
 		return nil
 	})
-	return assets, err
+	if err != nil {
+		return nil, err
+	}
+
+	// The build hash covers every file, so /v/<build>/ URLs change on each
+	// deploy that changes anything and can be cached forever.
+	names := make([]string, 0, len(assets))
+	for name := range assets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		io.WriteString(h, name+assets[name].etag)
+	}
+	build := hex.EncodeToString(h.Sum(nil)[:6])
+
+	// index.html points at the versioned shell and preloads its imports, so
+	// the browser fetches them in parallel instead of one after another.
+	idx, ok := assets["/index.html"]
+	if !ok {
+		return nil, errors.New("static/index.html missing")
+	}
+	v := "/v/" + build + "/"
+	html := strings.NewReplacer(
+		`href="/app.css"`, `href="`+v+`app.css"`,
+		`<script type="module" src="/app.js"></script>`,
+		`<script type="module" src="`+v+`app.js"></script>`+"\n"+
+			`<link rel="modulepreload" href="`+v+`lib/ui.js">`+"\n"+
+			`<link rel="modulepreload" href="`+v+`lib/detect.js">`,
+	).Replace(string(idx.body))
+	if strings.Count(html, v) != 4 {
+		return nil, errors.New("index.html: app.css/app.js tags not found for versioning")
+	}
+	assets["/index.html"] = newAsset("index.html", []byte(html))
+	return assets, nil
+}
+
+func newAsset(name string, body []byte) *asset {
+	sum := sha256.Sum256(body)
+	a := &asset{
+		body:        body,
+		contentType: typeFor(name),
+		etag:        `"` + hex.EncodeToString(sum[:8]) + `"`,
+	}
+	if strings.HasPrefix(a.contentType, "text/") || strings.Contains(a.contentType, "json") || strings.Contains(a.contentType, "svg") {
+		var buf bytes.Buffer
+		zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		zw.Write(body)
+		zw.Close()
+		if buf.Len() < len(body) {
+			a.gz = buf.Bytes()
+		}
+	}
+	return a
 }
 
 func staticHandler(assets map[string]*asset) http.HandlerFunc {
@@ -113,6 +155,14 @@ func staticHandler(assets map[string]*asset) http.HandlerFunc {
 		if p == "/" {
 			p = "/index.html"
 		}
+		// /v/<build>/path is the same file with a far-future cache. Any build
+		// id is accepted so a briefly stale index.html still loads.
+		versioned := false
+		if rest, ok := strings.CutPrefix(p, "/v/"); ok {
+			if _, file, ok := strings.Cut(rest, "/"); ok {
+				p, versioned = "/"+file, true
+			}
+		}
 		a, ok := assets[p]
 		if !ok {
 			http.NotFound(w, r)
@@ -120,14 +170,19 @@ func staticHandler(assets map[string]*asset) http.HandlerFunc {
 		}
 		h := w.Header()
 		h.Set("Content-Type", a.contentType)
-		h.Set("Cache-Control", "no-cache")
 		h.Set("ETag", a.etag)
 		h.Set("Vary", "Accept-Encoding")
-		if strings.HasPrefix(a.contentType, "text/html") {
+		switch {
+		case strings.HasPrefix(a.contentType, "text/html"):
 			h.Set("Content-Security-Policy", csp)
-			// no-transform stops Cloudflare injecting its analytics beacon,
-			// which the CSP would block anyway.
-			h.Set("Cache-Control", "no-cache, no-transform")
+			// Browsers revalidate every load; Cloudflare may keep it at the
+			// edge for 5 minutes (deploy.sh purges it). no-transform stops
+			// Cloudflare injecting its analytics beacon.
+			h.Set("Cache-Control", "public, max-age=0, s-maxage=300, must-revalidate, no-transform")
+		case versioned:
+			h.Set("Cache-Control", "public, max-age=31536000, immutable")
+		default:
+			h.Set("Cache-Control", "no-cache")
 		}
 		if r.Header.Get("If-None-Match") == a.etag {
 			w.WriteHeader(http.StatusNotModified)

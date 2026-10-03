@@ -10,7 +10,7 @@ const scope = self;
 const MAX_INTRA = 3000;
 
 /** @type {Promise<any>} */
-const jsdiff = import(/** @type {string} */ ('/vendor/diff.js'));
+const jsdiff = import(new URL('../vendor/diff.js', import.meta.url).href);
 
 /** @param {unknown} e */
 const msg = (e) => (e instanceof Error ? e.message : String(e));

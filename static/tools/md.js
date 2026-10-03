@@ -1,6 +1,6 @@
 // @ts-check
 // Markdown editor with live preview. Rendered with marked, sanitised with DOMPurify.
-import { el, toolbar, toast, download, fileButton, loadCSS, loadScript } from '../lib/ui.js';
+import { el, toolbar, toast, download, fileButton, loadCSS, loadScript, asset } from '../lib/ui.js';
 
 const STANDALONE_CSS = `
 body{max-width:820px;margin:32px auto;padding:0 16px;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;color:#1f2328;background:#fff}
@@ -153,7 +153,7 @@ export async function mount(root, input) {
   status.textContent = name;
 
   try {
-    const { marked } = await import(/** @type {string} */ ('/vendor/marked.esm.js'));
+    const { marked } = await import(asset('/vendor/marked.esm.js'));
     await loadScript('/vendor/purify.min.js');
     const purify = /** @type {any} */ (globalThis).DOMPurify;
     parse = (src, opts) => /** @type {string} */ (marked.parse(src, { ...opts, async: false }));
