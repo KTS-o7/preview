@@ -6,6 +6,25 @@ const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
 const ZOOM_STEP = 10;
 
+// Word list bullets use private-use code points from the Symbol/Wingdings
+// fonts, which browsers don't ship, so they render as missing-glyph boxes.
+/** @type {Record<string, string>} */
+const SYMBOL_GLYPHS = {
+  '\uf0b7': '•', '\uf0a7': '▪', '\uf06e': '■', '\uf0d8': '➢',
+  '\uf076': '❖', '\uf0fc': '✓', '\uf0a8': '□', '\uf0e0': '➔',
+};
+
+/** @param {HTMLElement} root */
+function fixSymbolBullets(root) {
+  for (const style of root.querySelectorAll('style')) {
+    const css = style.textContent ?? '';
+    if (!/[\uf000-\uf0ff]/.test(css)) continue;
+    style.textContent = css
+      .replace(/[\uf000-\uf0ff]/g, (c) => SYMBOL_GLYPHS[c] ?? '•')
+      .replace(/font-family:\s*(Symbol|Wingdings)[^;]*;/g, 'font-family: inherit;');
+  }
+}
+
 /**
  * @param {HTMLElement} root
  * @param {{file?: File, text?: string}} input
@@ -71,6 +90,7 @@ export async function mount(root, input) {
         ignoreHeight: false,
         breakPages: true,
       });
+      fixSymbolBullets(doc);
     } catch (e) {
       if (my !== seq) return;
       console.error(e);

@@ -128,10 +128,15 @@ export async function mount(root, input) {
     for (let i = 0; i < rows.length; i++) if (rows[i].length > cols) cols = rows[i].length;
     if (!cols) cols = 1;
     colW = [];
-    const sample = Math.min(rows.length, 100);
+    // Sample the head plus ~400 rows spread over the file, so long values
+    // further down don't get clipped.
+    const sample = [];
+    for (let r = 0; r < Math.min(rows.length, 100); r++) sample.push(r);
+    const stride = Math.max(1, Math.floor(rows.length / 400));
+    for (let r = 100; r < rows.length; r += stride) sample.push(r);
     for (let c = 0; c < cols; c++) {
       let m = c < 26 ? 1 : 3;
-      for (let r = 0; r < sample; r++) {
+      for (const r of sample) {
         const v = rows[r][c];
         if (v && v.length > m) m = v.length;
       }
@@ -439,12 +444,11 @@ export async function mount(root, input) {
     if (editor) commitEdit();
     e.preventDefault(); // keep focus on the grid, no text selection while clicking
     scroller.focus();
-    select(h.p, h.c);
-  });
-
-  bodyEl.addEventListener('dblclick', (e) => {
-    const h = hit(e);
-    if (h && !h.onNum) startEdit(h.p, h.c);
+    // Double-click is detected here, not with a dblclick listener: select()
+    // re-renders the rows, so the second click lands on a new node and the
+    // browser would fire dblclick on an ancestor instead of the cell.
+    if (e.detail >= 2 && !h.onNum) startEdit(h.p, h.c);
+    else select(h.p, h.c);
   });
 
   scroller.addEventListener('keydown', (e) => {

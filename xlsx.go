@@ -13,6 +13,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +34,12 @@ const (
 	xlsxMIME        = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	xlsxMinRows     = 20 // minimum grid so a fresh sheet is not cramped
 	xlsxMinCols     = 8
+	// Checking cells for formulas makes excelize load the whole worksheet
+	// model (~0.5 KB per cell), so it only happens for windows up to this size.
+	xlsxCalcCells = 100_000
+	// Above this heap size, least recently used workbooks are dropped early.
+	// The unit runs with GOMEMLIMIT=300MiB and MemoryMax=512M.
+	xlsxHeapBudget = 250 << 20
 )
 
 type workbook struct {
@@ -151,7 +159,7 @@ func (s *xlsxStore) upload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		f, err = excelize.OpenReader(part, excelize.Options{
-			UnzipSizeLimit:    256 << 20, // zip-bomb guard; the service is capped at 256M RSS
+			UnzipSizeLimit:    256 << 20, // zip-bomb guard; the service is capped at 512M RSS
 			UnzipXMLSizeLimit: 16 << 20,  // larger sheet XML spills to temp files
 		})
 		if err != nil {
@@ -182,6 +190,7 @@ func (s *xlsxStore) upload(w http.ResponseWriter, r *http.Request) {
 	s.wb[id] = wb
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, info)
+	s.trimMemory(id)
 }
 
 func uploadErr(w http.ResponseWriter, err error) {
@@ -238,6 +247,7 @@ func (s *xlsxStore) edit(w http.ResponseWriter, r *http.Request) {
 		wb.edited = true
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 	})
+	s.trimMemory(id)
 }
 
 // setCell applies xl's rules: "" clears, leading "=" is a formula, anything
@@ -293,7 +303,8 @@ func (s *xlsxStore) download(w http.ResponseWriter, r *http.Request) {
 //
 // excelize returns the values Excel cached for formula cells. Once the
 // workbook has been edited those caches can be stale (or empty for new
-// formulas), so recalc evaluates every formula cell in the window instead.
+// formulas), so recalc evaluates every formula cell in the window. Without
+// recalc only blank cells are checked for an uncached formula.
 func describeSheet(f *excelize.File, name, rng string, recalc bool) (sheetInfo, error) {
 	r1, c1, r2, c2 := parseA1Range(rng)
 	loRow, loCol := max(r1, 1), max(c1, 1)
@@ -342,16 +353,22 @@ func describeSheet(f *excelize.File, name, rng string, recalc bool) (sheetInfo, 
 		return sheetInfo{Name: name, Cells: [][]string{}}, nil
 	}
 	nr, nc := hiRow-loRow+1, hiCol-loCol+1
+	checkFormulas := nr*nc <= xlsxCalcCells
 	cells := make([][]string, nr)
 	for i := range cells {
 		cells[i] = make([]string, nc)
 		if i < len(kept) {
 			copy(cells[i], kept[i])
 		}
-		if !recalc {
+		if !checkFormulas {
 			continue
 		}
 		for j := range cells[i] {
+			// Files written by scripts (openpyxl, pandas) store formulas
+			// without cached values, so blanks are always checked.
+			if !recalc && cells[i][j] != "" {
+				continue
+			}
 			ref, _ := excelize.CoordinatesToCellName(loCol+j, loRow+i)
 			if formula, _ := f.GetCellFormula(name, ref); formula != "" {
 				if v, err := f.CalcCellValue(name, ref); err == nil {
@@ -442,12 +459,56 @@ func (s *xlsxStore) evict(now time.Time) int {
 	}
 	s.mu.Unlock()
 
-	// Close outside the map lock; an in-flight request finishes first.
+	closeBooks(dropped)
+	return len(dropped)
+}
+
+// closeBooks closes evicted workbooks outside the map lock; an in-flight
+// request on one of them finishes first.
+func closeBooks(dropped []*workbook) {
 	for _, wb := range dropped {
 		wb.mu.Lock()
 		wb.closed = true
 		wb.f.Close()
 		wb.mu.Unlock()
 	}
-	return len(dropped)
+}
+
+// trimMemory drops least recently used workbooks, never keep, while the heap
+// is over budget. Big edited sheets cost hundreds of MB each, so the count
+// cap alone does not bound memory.
+func (s *xlsxStore) trimMemory(keep string) {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	if ms.HeapAlloc <= xlsxHeapBudget {
+		return
+	}
+	s.mu.Lock()
+	type entry struct {
+		id string
+		wb *workbook
+	}
+	var others []entry
+	for id, wb := range s.wb {
+		if id != keep {
+			others = append(others, entry{id, wb})
+		}
+	}
+	sort.Slice(others, func(i, j int) bool {
+		return others[i].wb.lastAccess.Load() < others[j].wb.lastAccess.Load()
+	})
+	// Without per-workbook sizes, drop the older half (at least one).
+	n := max(1, len(others)/2)
+	var dropped []*workbook
+	for _, e := range others[:min(n, len(others))] {
+		delete(s.wb, e.id)
+		dropped = append(dropped, e.wb)
+	}
+	s.mu.Unlock()
+	if len(dropped) == 0 {
+		return
+	}
+	closeBooks(dropped)
+	debug.FreeOSMemory()
+	log.Printf("xlsx: heap %d MiB over budget, dropped %d workbooks", ms.HeapAlloc>>20, len(dropped))
 }

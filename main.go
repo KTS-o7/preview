@@ -54,7 +54,7 @@ var contentTypes = map[string]string{
 // cover the PDF and image viewers; https images allow remote Markdown images.
 const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' blob: data: https:; font-src 'self' data:; frame-src blob:; " +
-	"worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+	"worker-src 'self'; connect-src 'self'; object-src blob:; base-uri 'none'; form-action 'none'"
 
 func typeFor(name string) string {
 	ext := strings.ToLower(path.Ext(name))

@@ -322,7 +322,7 @@ function renderTable(segs, split) {
     };
     if (seg.type === 'lines') draw(null);
     else {
-      const row = fullRow(`Expand ${seg.count} lines`, () => {
+      const row = fullRow(`Expand ${seg.count} ${seg.count === 1 ? 'line' : 'lines'}`, () => {
         const next = row.nextSibling;
         row.remove();
         draw(next);
