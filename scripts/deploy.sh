@@ -25,12 +25,15 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     echo "healthy after deploy"
     # The HTML shell is edge-cached for 5 minutes (Cloudflare cache rule on
     # preview.shenthar.me/); purge it so the new build is served right away.
+    # cf exits 0 even when it aborts, so check the served page for the new build.
+    build=$(ssh "$HOST" "curl -fsS http://127.0.0.1:8092/" | sed -n 's|.*src="/v/\([^/]*\)/app.js".*|\1|p')
     if command -v cf >/dev/null; then
-      (cd /tmp && cf cache purge -z "$ZONE" --body "{\"files\":[\"$URL/\"]}" >/dev/null) \
-        && echo "purged $URL/ from Cloudflare" \
-        || echo "warning: Cloudflare purge failed; the old page may be served for up to 5 minutes" >&2
+      (cd /tmp && cf cache purge --force -z "$ZONE" --body "{\"files\":[\"$URL/\"]}" >/dev/null 2>&1)
+    fi
+    if curl -fsS "$URL/" | grep -q "/v/$build/app.js"; then
+      echo "serving build $build"
     else
-      echo "warning: cf CLI not found; the old page may be served for up to 5 minutes" >&2
+      echo "warning: Cloudflare still serves an older page (purge failed?); it expires within 5 minutes" >&2
     fi
     exit 0
   fi
