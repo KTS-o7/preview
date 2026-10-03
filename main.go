@@ -125,6 +125,9 @@ func staticHandler(assets map[string]*asset) http.HandlerFunc {
 		h.Set("Vary", "Accept-Encoding")
 		if strings.HasPrefix(a.contentType, "text/html") {
 			h.Set("Content-Security-Policy", csp)
+			// no-transform stops Cloudflare injecting its analytics beacon,
+			// which the CSP would block anyway.
+			h.Set("Cache-Control", "no-cache, no-transform")
 		}
 		if r.Header.Get("If-None-Match") == a.etag {
 			w.WriteHeader(http.StatusNotModified)
