@@ -1,0 +1,5 @@
+diff 9.0.0 https://registry.npmjs.org/diff/-/diff-9.0.0.tgz (package/libesm/index.js bundled to a single ESM file with bun build --format=esm --minify)
+docx-preview 0.4.1 https://registry.npmjs.org/docx-preview/-/docx-preview-0.4.1.tgz (dist/docx-preview.min.js -> docx-preview.min.js, UMD, needs global JSZip)
+jszip 3.10.2 https://registry.npmjs.org/jszip/-/jszip-3.10.2.tgz (dist/jszip.min.js -> jszip.min.js, UMD)
+marked 18.0.14 https://registry.npmjs.org/marked/-/marked-18.0.14.tgz (lib/marked.esm.js -> marked.esm.js, ESM)
+dompurify 3.4.16 https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz (dist/purify.min.js -> purify.min.js, UMD)

@@ -1,7 +1,16 @@
 # preview.shenthar.me: design
 
 Date: 2026-10-03
-Status: approved in conversation, pending spec review
+Status: approved and implemented. Changes made during implementation:
+- Server memory: `GOMEMLIMIT=300MiB`, `MemoryMax=512M`, plus heap-budget
+  eviction in the xlsx store (excelize needs ~0.5 KB per cell once a sheet is
+  edited). Unzip limit 256 MB.
+- XLSX reads recalculate formulas after edits, and fill uncached formulas in
+  files written by scripts, for sheets up to 100k cells.
+- md2pdf drops raw HTML, disables wkhtmltopdf JS and local file access, and
+  skips unloadable images.
+- CSP allows `object-src blob:` so the browser PDF viewer works inside the
+  blob iframe.
 
 ## Goal
 
