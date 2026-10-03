@@ -1,12 +1,13 @@
 // @ts-check
 // Plain text view/edit. Also the fallback for unknown file types.
-import { el, toolbar, download, fileButton, formatBytes } from '../lib/ui.js';
+import { el, toolbar, download, fileButton, formatBytes, loadCSS } from '../lib/ui.js';
 
 /**
  * @param {HTMLElement} root
  * @param {{file?: File, text?: string}} input
  */
 export async function mount(root, input) {
+  await loadCSS('/tools/text.css');
   let name = input.file?.name ?? 'untitled.txt';
   const area = /** @type {HTMLTextAreaElement} */ (el('textarea', {
     class: 'text-area', spellcheck: false, placeholder: 'Paste or type text, or drop a file…',

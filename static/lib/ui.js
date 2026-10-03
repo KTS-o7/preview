@@ -93,3 +93,24 @@ export function formatBytes(n) {
 
 /** Files above this size get a warning before browser-only processing. */
 export const SOFT_LIMIT = 50 * 1024 * 1024;
+
+/** @type {Map<string, Promise<void>>} */
+const cssLoads = new Map();
+/**
+ * Load a tool stylesheet once. Resolves when it has applied, so tools can
+ * await it before first paint and avoid a flash of unstyled content.
+ * @param {string} href absolute path, e.g. '/tools/csv.css'
+ */
+export function loadCSS(href) {
+  let p = cssLoads.get(href);
+  if (!p) {
+    p = new Promise((resolve) => {
+      const link = el('link', { rel: 'stylesheet', href });
+      link.addEventListener('load', () => resolve());
+      link.addEventListener('error', () => resolve());
+      document.head.append(link);
+    });
+    cssLoads.set(href, p);
+  }
+  return p;
+}
