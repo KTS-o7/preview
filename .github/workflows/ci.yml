@@ -1,7 +1,9 @@
 name: ci
 
+# Public repo: standard runners are free. PRs + main only, so a PR push runs once.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
