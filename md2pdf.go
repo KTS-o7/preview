@@ -67,8 +67,12 @@ func (m *md2pdf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), md2pdfTimeout)
 	defer cancel()
+	// Raw HTML is dropped and wkhtmltopdf runs without JS or local file
+	// access: the Markdown is untrusted. Unloadable images are skipped
+	// instead of failing the whole conversion.
 	cmd := exec.CommandContext(ctx, "pandoc",
 		mdPath,
+		"-f", "markdown-raw_html",
 		"-o", pdfPath,
 		"--pdf-engine=wkhtmltopdf",
 		"--metadata", "title=Document",
@@ -76,6 +80,10 @@ func (m *md2pdf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"-V", "margin-bottom=15",
 		"-V", "margin-left=15",
 		"-V", "margin-right=15",
+		"--pdf-engine-opt=--disable-javascript",
+		"--pdf-engine-opt=--disable-local-file-access",
+		"--pdf-engine-opt=--load-error-handling", "--pdf-engine-opt=ignore",
+		"--pdf-engine-opt=--load-media-error-handling", "--pdf-engine-opt=ignore",
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

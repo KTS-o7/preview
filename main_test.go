@@ -61,6 +61,7 @@ func TestMD2PDF(t *testing.T) {
 		wantPrefix string
 	}{
 		{"converts markdown", []byte("# Title\n\nSome *text*.\n"), http.StatusOK, "%PDF"},
+		{"skips unloadable images", []byte("![x](http://nope.invalid/a.png)\n\n<img src=x>\n"), http.StatusOK, "%PDF"},
 		{"rejects empty body", []byte("  \n"), http.StatusBadRequest, ""},
 		{"rejects oversized body", bytes.Repeat([]byte("a"), md2pdfMaxBody+1), http.StatusRequestEntityTooLarge, ""},
 	}
