@@ -1,0 +1,19 @@
+[Unit]
+Description=preview - file toolbox (preview.shenthar.me)
+After=network.target
+
+[Service]
+Type=simple
+Environment=PORT=8092
+Environment=GOMEMLIMIT=150MiB
+ExecStart=/opt/preview/preview
+WorkingDirectory=/opt/preview
+Restart=on-failure
+RestartSec=5
+User=deploy
+MemoryMax=256M
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

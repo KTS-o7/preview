@@ -49,6 +49,13 @@ var contentTypes = map[string]string{
 	".txt":  "text/plain; charset=utf-8",
 }
 
+// csp applies to the HTML shell. Tools render untrusted documents (Markdown,
+// DOCX), so scripts only come from our own origin. Blob frames and images
+// cover the PDF and image viewers; https images allow remote Markdown images.
+const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' blob: data: https:; font-src 'self' data:; frame-src blob:; " +
+	"worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+
 func typeFor(name string) string {
 	ext := strings.ToLower(path.Ext(name))
 	if t, ok := contentTypes[ext]; ok {
@@ -116,6 +123,9 @@ func staticHandler(assets map[string]*asset) http.HandlerFunc {
 		h.Set("Cache-Control", "no-cache")
 		h.Set("ETag", a.etag)
 		h.Set("Vary", "Accept-Encoding")
+		if strings.HasPrefix(a.contentType, "text/html") {
+			h.Set("Content-Security-Policy", csp)
+		}
 		if r.Header.Get("If-None-Match") == a.etag {
 			w.WriteHeader(http.StatusNotModified)
 			return
